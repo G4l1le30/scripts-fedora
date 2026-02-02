@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+# pdf_to_text.py
+import PyPDF2
+import os
+
+def convert_pdf_to_text(pdf_path):
+    """
+    Converts a PDF file to a plain text file.
+
+    Args:
+        pdf_path (str): The path to the input PDF file.
+
+    Returns:
+        str: The path to the output text file, or None if an error occurred.
+    """
+    if not os.path.exists(pdf_path):
+        print(f"Error: PDF file not found at '{pdf_path}'")
+        return None
+    if not pdf_path.lower().endswith('.pdf'):
+        print(f"Error: Input file '{pdf_path}' is not a PDF.")
+        return None
+
+    try:
+        # Create a PDF file object
+        with open(pdf_path, 'rb') as pdf_file_obj:
+            # Create a PDF reader object
+            pdf_reader = PyPDF2.PdfReader(pdf_file_obj)
+
+            text_content = ""
+            # Iterate over all pages
+            for page_num in range(len(pdf_reader.pages)):
+                page_obj = pdf_reader.pages[page_num]
+                text_content += page_obj.extract_text()
+
+            # Create output text file name
+            base_name = os.path.splitext(pdf_path)[0]
+            output_text_path = f"{base_name}.txt"
+
+            # Write the extracted text to a file
+            with open(output_text_path, 'w', encoding='utf-8') as text_file:
+                text_file.write(text_content)
+            
+            print(f"Successfully converted '{pdf_path}' to '{output_text_path}'")
+            return output_text_path
+
+    except Exception as e:
+        print(f"An error occurred during PDF conversion: {e}")
+        return None
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Convert PDF files to text.")
+    parser.add_argument("pdf_files", nargs="*", default=[], help="The PDF files to convert.")
+    args = parser.parse_args()
+
+    pdf_files = args.pdf_files
+    if not pdf_files:
+        while True:
+            try:
+                pdf_input = input("PDF file path (or press Enter to finish): ").strip()
+                if not pdf_input:
+                    break
+                pdf_files.append(pdf_input)
+            except EOFError:
+                break
+
+    for pdf_file in pdf_files:
+        convert_pdf_to_text(pdf_file)

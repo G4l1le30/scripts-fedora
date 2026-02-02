@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+
+import argparse
+from urllib.parse import parse_qs, urlparse
+
+from youtube_transcript_api import (
+    NoTranscriptFound,
+    YouTubeTranscriptApi,
+)
+from youtube_transcript_api.formatters import TextFormatter
+
+
+def get_video_id(url: str) -> str | None:
+    """
+    Extract video ID from YouTube URL.
+    """
+    query = urlparse(url)
+
+    if query.hostname == "youtu.be":
+        return query.path.lstrip("/")
+
+    if query.hostname in ("www.youtube.com", "youtube.com"):
+        if query.path == "/watch":
+            params = parse_qs(query.query)
+            return params.get("v", [None])[0]
+
+        if query.path.startswith("/embed/"):
+            return query.path.split("/")[2]
+
+        if query.path.startswith("/v/"):
+            return query.path.split("/")[2]
+
+    return None
+
+
+def get_transcript(video_id: str) -> str:
+    ytt_api = YouTubeTranscriptApi()
+    formatter = TextFormatter()
+
+    transcript_list = ytt_api.list(video_id)
+
+    print("ℹ️ Available transcripts:")
+    for t in transcript_list:
+        print(
+            f"  - {t.language_code} ({'auto-generated' if t.is_generated else 'manual'})"
+        )
+
+    # 1️⃣ English (manual / auto)
+    try:
+        print("ℹ️ Trying to find English transcript...")
+        transcript = transcript_list.find_transcript(["en"])
+        print("✅ Found English transcript.")
+        return formatter.format_transcript(transcript.fetch())
+    except NoTranscriptFound:
+        print("ℹ️ No English transcript found.")
+
+    # 2️⃣ Indonesian → USE AS IS (NO TRANSLATE)
+    try:
+        print("ℹ️ Trying to find Indonesian transcript...")
+        transcript = transcript_list.find_transcript(["id"])
+        print("✅ Found Indonesian transcript. Using original language.")
+        return formatter.format_transcript(transcript.fetch())
+    except NoTranscriptFound:
+        print("ℹ️ No Indonesian transcript found.")
+
+    # 3️⃣ Fallback: translate ANY other language to English
+    print("ℹ️ Looking for a translatable transcript...")
+    for t in transcript_list:
+        if t.is_translatable:
+            print(f"✅ Translating '{t.language_code}' → English...")
+            translated = t.translate("en")
+            return formatter.format_transcript(translated.fetch())
+
+    raise Exception("No usable transcript found")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Get YouTube video transcript")
+    parser.add_argument(
+        "url",
+        help="YouTube video URL",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        help="Output file path",
+    )
+
+    args = parser.parse_args()
+
+    video_id = get_video_id(args.url)
+    if not video_id:
+        print("❌ Could not extract video ID from URL")
+        return
+
+    try:
+        transcript_text = get_transcript(video_id)
+
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(transcript_text)
+            print(f"✅ Transcript saved to {args.output}")
+        else:
+            print(transcript_text)
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+
+if __name__ == "__main__":
+    main()
