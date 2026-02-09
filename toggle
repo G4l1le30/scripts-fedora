@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+# use sudo ln -s "$HOME/scripts/toggle" /usr/local/bin/toggle for symbolic link
+import os
+
+HOSTS = "/etc/hosts"
+DOMAIN = "chatgpt.com"
+DOMAIN2 = "gemini.google.com"
+LINE = f"127.0.0.1 {DOMAIN} 127.0.0.1 {DOMAIN2}"
+
+
+def toggle():
+    with open(HOSTS, "r") as f:
+        lines = f.readlines()
+
+    if LINE in lines:
+        # UNBLOCK
+        with open(HOSTS, "w") as f:
+            for l in lines:
+                if l != LINE:
+                    f.write(l)
+        print(f"[+] {DOMAIN} and {DOMAIN2} enabled (unblocked).")
+    else:
+        # BLOCK
+        with open(HOSTS, "a") as f:
+            f.write(LINE)
+        print(f"[+] {DOMAIN} and {DOMAIN2} disabled (blocked).")
+
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        print(f"current user id:{os.geteuid()}")
+        print("Jalankan dengan sudo!")
+    else:
+        print(f"current user id:{os.geteuid()}")
+        toggle()
