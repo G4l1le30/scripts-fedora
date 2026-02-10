@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Fedora Weekly Auto Clean Script
 # Aman untuk SSD kecil & dev environment
+# echo "user ALL=(ALL) NOPASSWD: /usr/sbin/dnf, /usr/sbin/journalctl, /usr/bin/journalctl, /usr/bin/du, /usr/sbin/du" | sudo tee /etc/sudoers.d/fedora-autoclean
 
 set -e
 
