@@ -53,6 +53,12 @@ if [ -d "$HOME/.local/share/opencode/snapshot" ]; then
     rm -rf "$HOME/.local/share/opencode/snapshot"
 fi
 
+echo "[*] Cari folder terbesar di root..."
+sudo du -xh / --max-depth=1 2>/dev/null | sort -h
+
+echo "[*] Fokus ke /var..."
+sudo du -xh /var --max-depth=1 | sort -h
+
 echo "=== Fedora Auto Clean Finished: $(date) ==="
 docker system df
 echo "---List of all images stored on local system---"
