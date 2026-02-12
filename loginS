@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+import argparse
+import datetime
 import getpass
-import json
 import os
 
 from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright, TimeoutError
+from playwright.sync_api import TimeoutError, sync_playwright
 
 # Muat variabel dari file .env
 load_dotenv()
@@ -14,29 +15,37 @@ DEFAULT_USERNAME = os.getenv("DEFAULT_USERNAME")
 DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD")
 
 
-def run(playwright):
-    # Meminta username dari pengguna
-    username_input = input(
-        f"Masukkan username Anda (kosongkan untuk default: {DEFAULT_USERNAME}): "
+def run(playwright, headless_mode):
+    print(
+        f"--- Script started at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---"
     )
 
-    if username_input:
-        # Jika pengguna memasukkan username, minta password
-        username = username_input
-        password = getpass.getpass("Masukkan password Anda: ")
-    else:
-        # Jika pengguna tidak memasukkan apa-apa, gunakan nilai default
+    # If running in headless mode for cron, do not prompt for input.
+    # Rely on the .env file for credentials.
+    if headless_mode:
         username = DEFAULT_USERNAME
         password = DEFAULT_PASSWORD
-        print(f"Menggunakan username default: {username}")
+        print(f"Running in headless mode. Using username: {username}")
+    else:
+        # In interactive mode, prompt the user.
+        username_input = input(
+            f"Masukkan username Anda (kosongkan untuk default: {DEFAULT_USERNAME}): "
+        )
+        if username_input:
+            username = username_input
+            password = getpass.getpass("Masukkan password Anda: ")
+        else:
+            username = DEFAULT_USERNAME
+            password = DEFAULT_PASSWORD
+            print(f"Menggunakan username default: {username}")
 
-    if not password:
-        print("Password tidak boleh kosong.")
+    if not username or not password:
+        print(
+            "Username or password not provided. For cron jobs, ensure they are set in the .env file."
+        )
         return
 
-    browser = playwright.firefox.launch(
-        headless=False
-    )  # Gunakan headless=False untuk melihat browser
+    browser = playwright.firefox.launch(headless=headless_mode)
     context = browser.new_context()
     page = context.new_page()
 
@@ -76,57 +85,70 @@ def run(playwright):
 
         try:
             hadir_luring_button_selector = 'button:has-text("Hadir Luring")'
-            
+
             print("Menunggu tombol 'Hadir Luring' muncul (maksimal 10 detik)...")
             page.wait_for_selector(hadir_luring_button_selector, timeout=10000)
             luring_button = page.query_selector(hadir_luring_button_selector)
 
             if luring_button and luring_button.is_visible():
                 print("Menemukan tombol 'Hadir Luring'.")
-                
+
                 try:
                     # Try to find the course name for context from the button's ancestor element
-                    list_item = luring_button.query_selector('xpath=ancestor::div[contains(@class, "list-group-item")]')
+                    list_item = luring_button.query_selector(
+                        'xpath=ancestor::div[contains(@class, "list-group-item")]'
+                    )
                     if list_item:
-                        course_name_element = list_item.query_selector('h4 > b')
+                        course_name_element = list_item.query_selector("h4 > b")
                         if course_name_element:
                             course_name = course_name_element.inner_text()
                             print(f"Mencoba presensi untuk mata kuliah: {course_name}")
                 except Exception:
                     # This part is for logging, so if it fails, we can just print a message and proceed.
-                    print("Tidak dapat menemukan nama mata kuliah, melanjutkan proses presensi...")
+                    print(
+                        "Tidak dapat menemukan nama mata kuliah, melanjutkan proses presensi..."
+                    )
 
                 print("Mengklik tombol 'Hadir Luring'...")
                 luring_button.click()
-                
+
                 # Wait for the confirmation popup
                 print("Menunggu popup konfirmasi...")
-                popup_confirm_button_selector = 'button.swal2-confirm:has-text("Proses")'
+                popup_confirm_button_selector = (
+                    'button.swal2-confirm:has-text("Proses")'
+                )
                 try:
                     page.wait_for_selector(popup_confirm_button_selector, timeout=5000)
                     confirm_button = page.query_selector(popup_confirm_button_selector)
-                    
+
                     if confirm_button and confirm_button.is_visible():
                         print("Popup konfirmasi ditemukan. Mengklik tombol 'Proses'...")
                         confirm_button.click()
-                        
+
                         # Wait for the action to complete
                         page.wait_for_timeout(3000)
-                        print("Selesai. Kehadiran luring seharusnya sudah dikonfirmasi.")
+                        print(
+                            "Selesai. Kehadiran luring seharusnya sudah dikonfirmasi."
+                        )
                     else:
                         print("Tombol 'Proses' pada popup tidak ditemukan.")
 
                 except TimeoutError:
                     print("Popup konfirmasi tidak muncul dalam 5 detik.")
-                
+
             else:
                 # This case is unlikely if wait_for_selector succeeds
                 print("Tombol 'Hadir Luring' tidak terlihat meskipun elemennya ada.")
 
         except TimeoutError:
-             print("Tidak ada presensi yang sedang berjalan (tombol 'Hadir Luring' tidak ditemukan dalam 10 detik).")
+            print(
+                "Tidak ada presensi yang sedang berjalan (tombol 'Hadir Luring' tidak ditemukan dalam 10 detik)."
+            )
         except Exception as e:
             print(f"Terjadi kesalahan saat mencoba melakukan presensi: {e}")
+        print(
+            f"--- Script has ended at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---"
+        )
 
     except Exception as e:
         print(f"Terjadi kesalahan: {e}")
@@ -142,5 +164,16 @@ def run(playwright):
         browser.close()
 
 
-with sync_playwright() as playwright:
-    run(playwright)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Automatic attendance script for SIam UB."
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run in headless mode (e.g., for cron jobs).",
+    )
+    args = parser.parse_args()
+
+    with sync_playwright() as playwright:
+        run(playwright, headless_mode=args.headless)
