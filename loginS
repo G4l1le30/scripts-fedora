@@ -70,6 +70,29 @@ def run(playwright, headless_mode):
         print("Mengklik tombol 'Sign In'...")
         page.click("#kc-login")
 
+        # Check for login failure first
+        try:
+            # Wait up to 5 seconds for the "Invalid username or password" message
+            error_locator = page.locator("span#input-error")
+            error_locator.wait_for(timeout=5000)
+            
+            # If wait_for doesn't time out, it means the element is there.
+            error_text = error_locator.inner_text()
+            if "Invalid username or password." in error_text:
+                print("Gagal masuk: Nama pengguna atau kata sandi tidak valid.")
+                # Take a screenshot for debugging
+                error_screenshot_path = "halaman_error_login.png"
+                page.screenshot(path=error_screenshot_path)
+                print(f"Screenshot halaman error disimpan di: {os.path.abspath(error_screenshot_path)}")
+                return # Exit gracefully
+            
+        except TimeoutError:
+            # This is the expected path for a SUCCESSFUL login.
+            # The error message did not appear within the timeout.
+            print("Pesan error login tidak ditemukan, melanjutkan...")
+            pass # Continue to wait for the dashboard page
+
+
         # Tunggu hingga halaman mahasiswa dimuat dan dashboard terlihat
         print("Menunggu halaman mahasiswa...")
         page.wait_for_selector('a.menu-link[href="https://siam.ub.ac.id/mahasiswa"]')
