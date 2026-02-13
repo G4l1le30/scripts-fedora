@@ -26,11 +26,12 @@ if command -v flatpak &>/dev/null; then
 fi
 
 # 5. User cache
-echo "[*] Cleaning user cache (excluding mozilla)..."
+echo "[*] Cleaning user cache (excluding mozilla & ms-playwright)..."
 find ~/.cache \
     -mindepth 1 \
     -maxdepth 1 \
     ! -name mozilla \
+    ! -name ms-playwright \
     -exec rm -rf {} + || true
 
 # 6. Flatpak user cache
