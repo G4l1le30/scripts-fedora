@@ -65,5 +65,8 @@ echo "=== Fedora Auto Clean Finished: $(date) ==="
 docker system df
 echo "---List of all images stored on local system---"
 docker image ls
+
+echo "---List of all containers---"
+docker ps -a
 echo "-----------------------------------------------"
 df -h /

@@ -105,6 +105,9 @@ def split_and_write_files(content: str):
         print("No files detected in output.")
         return
 
+    total_files = len(matches)
+    print(f"Processing {total_files} files...")
+
     for i, match in enumerate(matches):
         filename = match.group(1).strip()
         start = match.end()
@@ -115,12 +118,15 @@ def split_and_write_files(content: str):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(file_content + "\n", encoding="utf-8")
 
-        print(f"✔ Generated: {filename}")
+        percentage = (i + 1) / total_files * 100
+        print(f"✔ Generated: {filename} ({percentage:.0f}%)")
 
 
 def main():
+    print("Starting documentation generation...")
     existing_doc = read_existing_doc()
     prompt = build_prompt(existing_doc)
+    print("Calling Gemini CLI to generate documentation...")
     output = run_gemini(prompt)
 
     Path(OUTPUT_FILE).write_text(output, encoding="utf-8")
