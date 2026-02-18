@@ -3,10 +3,19 @@ import argparse
 import datetime
 import getpass
 import os
+import sys
 import time
 
-from dotenv import load_dotenv
-from playwright.sync_api import TimeoutError, sync_playwright
+try:
+    from dotenv import load_dotenv
+    from playwright.sync_api import TimeoutError, sync_playwright
+except ImportError as e:
+    print(f"\nError: Modul '{e.name}' tidak ditemukan.")
+    print("Silakan install dependensi yang diperlukan dengan menjalankan:")
+    print("    pip install -r requirements.txt")
+    print("Atau install secara manual:")
+    print("    pip install playwright python-dotenv")
+    sys.exit(1)
 
 # Muat variabel dari file .env
 load_dotenv()
@@ -211,6 +220,17 @@ def run(playwright, headless_mode):
                 print("Gagal setelah mencapai jumlah percobaan maksimal.")
 
         except Exception as e:
+            error_msg = str(e).lower()
+            if "executable doesn't exist" in error_msg or "playwright install" in error_msg:
+                print("\nError: Browser Firefox untuk Playwright tidak ditemukan atau rusak.")
+                print("Silakan jalankan perintah berikut di terminal untuk memperbaikinya:")
+                print("    playwright install firefox")
+                
+                if sys.platform.startswith("linux"):
+                    print("\nJika Anda menggunakan Linux dan masih mengalami masalah, coba instal dependensi sistem:")
+                    print("    sudo playwright install-deps")
+                return  # Fatal error, stop trying
+
             print(f"Terjadi kesalahan yang tidak terduga: {e}")
             if page:
                 error_screenshot_path = "halaman_error.png"
@@ -239,5 +259,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    with sync_playwright() as playwright:
-        run(playwright, headless_mode=args.headless)
+    try:
+        with sync_playwright() as playwright:
+            run(playwright, headless_mode=args.headless)
+    except KeyboardInterrupt:
+        print("\nScript dihentikan oleh pengguna (Ctrl+C). Keluar...")
