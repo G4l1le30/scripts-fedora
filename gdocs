@@ -94,7 +94,7 @@ def run_gemini(prompt: str):
     except subprocess.CalledProcessError as e:
         print("Error running Gemini CLI:")
         print(e.stderr)
-        exit(1)
+        return ""
 
 
 def split_and_write_files(content: str):
