@@ -3,6 +3,7 @@ import argparse
 import datetime
 import getpass
 import os
+import time
 
 from dotenv import load_dotenv
 from playwright.sync_api import TimeoutError, sync_playwright
@@ -45,146 +46,186 @@ def run(playwright, headless_mode):
         )
         return
 
-    browser = playwright.firefox.launch(headless=headless_mode)
-    context = browser.new_context()
-    page = context.new_page()
-
-    try:
-        # Buka halaman login
-        print("Membuka halaman login...")
-        page.goto("https://siam.ub.ac.id/")
-
-        # Klik tombol "LOGIN UB"
-        print("Mengklik tombol 'LOGIN UB'...")
-        page.click('button:has-text("LOGIN UB")')
-
-        # Tunggu hingga form login muncul (misalnya, dengan menunggu input username)
-        page.wait_for_selector("input[name='username']")
-
-        # Mengisi form login
-        print("Mengisi username dan password...")
-        page.fill("input[name='username']", username)
-        page.fill("input[name='password']", password)
-
-        # Klik tombol "Sign In"
-        print("Mengklik tombol 'Sign In'...")
-        page.click("#kc-login")
-
-        # Check for login failure first
+    max_retries = 3
+    for attempt in range(max_retries):
+        browser = None
+        page = None
         try:
-            # Wait up to 5 seconds for the "Invalid username or password" message
-            error_locator = page.locator("span#input-error")
-            error_locator.wait_for(timeout=5000)
-            
-            # If wait_for doesn't time out, it means the element is there.
-            error_text = error_locator.inner_text()
-            if "Invalid username or password." in error_text:
-                print("Gagal masuk: Nama pengguna atau kata sandi tidak valid.")
-                # Take a screenshot for debugging
-                error_screenshot_path = "halaman_error_login.png"
-                page.screenshot(path=error_screenshot_path)
-                print(f"Screenshot halaman error disimpan di: {os.path.abspath(error_screenshot_path)}")
-                return # Exit gracefully
-            
-        except TimeoutError:
-            # This is the expected path for a SUCCESSFUL login.
-            # The error message did not appear within the timeout.
-            print("Pesan error login tidak ditemukan, melanjutkan...")
-            pass # Continue to wait for the dashboard page
+            print(f"--- Percobaan {attempt + 1}/{max_retries} ---")
+            browser = playwright.firefox.launch(headless=headless_mode)
+            context = browser.new_context()
+            page = context.new_page()
 
+            # Buka halaman login
+            print("Membuka halaman login...")
+            page.goto("https://siam.ub.ac.id/")
 
-        # Tunggu hingga halaman mahasiswa dimuat dan dashboard terlihat
-        print("Menunggu halaman mahasiswa...")
-        page.wait_for_selector('a.menu-link[href="https://siam.ub.ac.id/mahasiswa"]')
-        print("Berhasil masuk ke halaman mahasiswa.")
+            # Klik tombol "LOGIN UB"
+            print("Mengklik tombol 'LOGIN UB'...")
+            page.click('button:has-text("LOGIN UB")')
 
-        # Navigasi ke halaman presensi terlebih dahulu
-        print("Menavigasi ke halaman presensi...")
-        page.goto("https://siam.ub.ac.id/mahasiswa/presensi")
+            # Tunggu hingga form login muncul (misalnya, dengan menunggu input username)
+            page.wait_for_selector("input[name='username']")
 
-        # Tunggu hingga elemen statis halaman dimuat
-        page.wait_for_selector("h4.card-title:has-text('Presensi Kehadiran Online')")
-        print("Halaman presensi dimuat. Mencari tombol presensi...")
+            # Mengisi form login
+            print("Mengisi username dan password...")
+            page.fill("input[name='username']", username)
+            page.fill("input[name='password']", password)
 
-        try:
-            hadir_luring_button_selector = 'button:has-text("Hadir Luring")'
+            # Klik tombol "Sign In"
+            print("Mengklik tombol 'Sign In'...")
+            page.click("#kc-login")
 
-            print("Menunggu tombol 'Hadir Luring' muncul (maksimal 10 detik)...")
-            page.wait_for_selector(hadir_luring_button_selector, timeout=10000)
-            luring_button = page.query_selector(hadir_luring_button_selector)
+            # Check for login failure first
+            try:
+                # Wait up to 5 seconds for the "Invalid username or password" message
+                error_locator = page.locator("span#input-error")
+                error_locator.wait_for(timeout=5000)
 
-            if luring_button and luring_button.is_visible():
-                print("Menemukan tombol 'Hadir Luring'.")
-
-                try:
-                    # Try to find the course name for context from the button's ancestor element
-                    list_item = luring_button.query_selector(
-                        'xpath=ancestor::div[contains(@class, "list-group-item")]'
-                    )
-                    if list_item:
-                        course_name_element = list_item.query_selector("h4 > b")
-                        if course_name_element:
-                            course_name = course_name_element.inner_text()
-                            print(f"Mencoba presensi untuk mata kuliah: {course_name}")
-                except Exception:
-                    # This part is for logging, so if it fails, we can just print a message and proceed.
+                # If wait_for doesn't time out, it means the element is there.
+                error_text = error_locator.inner_text()
+                if "Invalid username or password." in error_text:
+                    print("Gagal masuk: Nama pengguna atau kata sandi tidak valid.")
+                    # Take a screenshot for debugging
+                    error_screenshot_path = "halaman_error_login.png"
+                    page.screenshot(path=error_screenshot_path)
                     print(
-                        "Tidak dapat menemukan nama mata kuliah, melanjutkan proses presensi..."
+                        f"Screenshot halaman error disimpan di: {os.path.abspath(error_screenshot_path)}"
+                    )
+                    return  # Exit gracefully, no retry needed
+
+            except TimeoutError:
+                # This is the expected path for a SUCCESSFUL login.
+                # The error message did not appear within the timeout.
+                print("Pesan error login tidak ditemukan, melanjutkan...")
+                pass  # Continue to wait for the dashboard page
+
+            # Tunggu hingga halaman mahasiswa dimuat dan dashboard terlihat
+            print("Menunggu halaman mahasiswa...")
+            page.wait_for_selector('a.menu-link[href="https://siam.ub.ac.id/mahasiswa"]')
+            print("Berhasil masuk ke halaman mahasiswa.")
+
+            # Navigasi ke halaman presensi terlebih dahulu
+            print("Menavigasi ke halaman presensi...")
+            page.goto("https://siam.ub.ac.id/mahasiswa/presensi")
+
+            # Tunggu hingga elemen statis halaman dimuat
+            page.wait_for_selector("h4.card-title:has-text('Presensi Kehadiran Online')")
+            print("Halaman presensi dimuat. Mencari tombol presensi...")
+
+            try:
+                hadir_luring_button_selector = 'button:has-text("Hadir Luring")'
+
+                print("Menunggu tombol 'Hadir Luring' muncul (maksimal 10 detik)...")
+                page.wait_for_selector(hadir_luring_button_selector, timeout=10000)
+                luring_button = page.query_selector(hadir_luring_button_selector)
+
+                if luring_button and luring_button.is_visible():
+                    print("Menemukan tombol 'Hadir Luring'.")
+
+                    try:
+                        # Try to find the course name for context from the button's ancestor element
+                        list_item = luring_button.query_selector(
+                            'xpath=ancestor::div[contains(@class, "list-group-item")]'
+                        )
+                        if list_item:
+                            course_name_element = list_item.query_selector("h4 > b")
+                            if course_name_element:
+                                course_name = course_name_element.inner_text()
+                                print(
+                                    f"Mencoba presensi untuk mata kuliah: {course_name}"
+                                )
+                    except Exception:
+                        # This part is for logging, so if it fails, we can just print a message and proceed.
+                        print(
+                            "Tidak dapat menemukan nama mata kuliah, melanjutkan proses presensi..."
+                        )
+
+                    print("Mengklik tombol 'Hadir Luring'...")
+                    luring_button.click()
+
+                    # Wait for the confirmation popup
+                    print("Menunggu popup konfirmasi...")
+                    popup_confirm_button_selector = (
+                        'button.swal2-confirm:has-text("Proses")'
+                    )
+                    try:
+                        page.wait_for_selector(
+                            popup_confirm_button_selector, timeout=5000
+                        )
+                        confirm_button = page.query_selector(
+                            popup_confirm_button_selector
+                        )
+
+                        if confirm_button and confirm_button.is_visible():
+                            print(
+                                "Popup konfirmasi ditemukan. Mengklik tombol 'Proses'..."
+                            )
+                            confirm_button.click()
+
+                            # Wait for the action to complete
+                            page.wait_for_timeout(3000)
+                            print(
+                                "Selesai. Kehadiran luring seharusnya sudah dikonfirmasi."
+                            )
+                        else:
+                            print("Tombol 'Proses' pada popup tidak ditemukan.")
+
+                    except TimeoutError:
+                        print("Popup konfirmasi tidak muncul dalam 5 detik.")
+
+                else:
+                    # This case is unlikely if wait_for_selector succeeds
+                    print(
+                        "Tombol 'Hadir Luring' tidak terlihat meskipun elemennya ada."
                     )
 
-                print("Mengklik tombol 'Hadir Luring'...")
-                luring_button.click()
-
-                # Wait for the confirmation popup
-                print("Menunggu popup konfirmasi...")
-                popup_confirm_button_selector = (
-                    'button.swal2-confirm:has-text("Proses")'
+            except TimeoutError:
+                print(
+                    "Tidak ada presensi yang sedang berjalan (tombol 'Hadir Luring' tidak ditemukan dalam 10 detik)."
                 )
-                try:
-                    page.wait_for_selector(popup_confirm_button_selector, timeout=5000)
-                    confirm_button = page.query_selector(popup_confirm_button_selector)
+            except Exception as e:
+                print(f"Terjadi kesalahan saat mencoba melakukan presensi: {e}")
 
-                    if confirm_button and confirm_button.is_visible():
-                        print("Popup konfirmasi ditemukan. Mengklik tombol 'Proses'...")
-                        confirm_button.click()
-
-                        # Wait for the action to complete
-                        page.wait_for_timeout(3000)
-                        print(
-                            "Selesai. Kehadiran luring seharusnya sudah dikonfirmasi."
-                        )
-                    else:
-                        print("Tombol 'Proses' pada popup tidak ditemukan.")
-
-                except TimeoutError:
-                    print("Popup konfirmasi tidak muncul dalam 5 detik.")
-
-            else:
-                # This case is unlikely if wait_for_selector succeeds
-                print("Tombol 'Hadir Luring' tidak terlihat meskipun elemennya ada.")
-
-        except TimeoutError:
             print(
-                "Tidak ada presensi yang sedang berjalan (tombol 'Hadir Luring' tidak ditemukan dalam 10 detik)."
+                f"--- Script has ended at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---"
             )
+            break  # Success, exit the retry loop
+
+        except TimeoutError as e:
+            print(f"Terjadi kesalahan (Timeout) pada percobaan {attempt + 1}: {e}")
+            if page:
+                error_screenshot_path = f"halaman_error_attempt_{attempt + 1}.png"
+                try:
+                    page.screenshot(path=error_screenshot_path)
+                    print(
+                        f"Screenshot halaman error disimpan di: {os.path.abspath(error_screenshot_path)}"
+                    )
+                except Exception as screenshot_error:
+                    print(f"Gagal menyimpan screenshot: {screenshot_error}")
+
+            if attempt < max_retries - 1:
+                print("Akan mencoba lagi dalam 5 detik...")
+                time.sleep(5)
+            else:
+                print("Gagal setelah mencapai jumlah percobaan maksimal.")
+
         except Exception as e:
-            print(f"Terjadi kesalahan saat mencoba melakukan presensi: {e}")
-        print(
-            f"--- Script has ended at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---"
-        )
+            print(f"Terjadi kesalahan yang tidak terduga: {e}")
+            if page:
+                error_screenshot_path = "halaman_error.png"
+                try:
+                    page.screenshot(path=error_screenshot_path)
+                    print(
+                        f"Screenshot halaman error disimpan di: {os.path.abspath(error_screenshot_path)}"
+                    )
+                except Exception as screenshot_error:
+                    print(f"Gagal menyimpan screenshot: {screenshot_error}")
+            break  # Don't retry on other unexpected errors
 
-    except Exception as e:
-        print(f"Terjadi kesalahan: {e}")
-        # Simpan screenshot halaman saat ini untuk debugging
-        error_screenshot_path = "halaman_error.png"
-        page.screenshot(path=error_screenshot_path)
-        print(
-            f"Screenshot halaman error disimpan di: {os.path.abspath(error_screenshot_path)}"
-        )
-
-    finally:
-        # Tutup browser
-        browser.close()
+        finally:
+            if browser:
+                browser.close()
 
 
 if __name__ == "__main__":
