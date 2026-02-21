@@ -1,43 +1,81 @@
 #!/usr/bin/env python3
 # use sudo ln -s "$HOME/scripts/toggle" /usr/local/bin/toggle for symbolic link
 import os
+import sys
 
 HOSTS = "/etc/hosts"
 DOMAIN = "chatgpt.com"
 DOMAIN2 = "gemini.google.com"
 LINE = f"127.0.0.1 {DOMAIN} 127.0.0.1 {DOMAIN2}\n"
 
+def is_blocked():
+    """Check if the domains are currently blocked in the hosts file."""
+    try:
+        with open(HOSTS, "r") as f:
+            for line in f:
+                if DOMAIN in line or DOMAIN2 in line:
+                    return True
+    except FileNotFoundError:
+        return False
+    return False
 
-def toggle():
-    with open(HOSTS, "r") as f:
-        lines = f.readlines()
+def block():
+    """Ensures the domains are blocked."""
+    if is_blocked():
+        print(f"[+] {DOMAIN} and {DOMAIN2} are already blocked.")
+        return
 
-    new_lines = []
-    found_blocking_line = False
-    
-    for line in lines:
-        if DOMAIN in line or DOMAIN2 in line:
-            found_blocking_line = True
-            # Do not add this line to new_lines, effectively removing it
-        else:
-            new_lines.append(line)
+    try:
+        with open(HOSTS, "a") as f:
+            f.write(LINE)
+        print(f"[+] {DOMAIN} and {DOMAIN2} are now disabled (blocked).")
+    except PermissionError:
+        print("Error: Permission denied. Please run with sudo.")
+        sys.exit(1)
 
-    with open(HOSTS, "w") as f:
-        if found_blocking_line:
-            # UNBLOCK: write all lines except the ones containing DOMAIN or DOMAIN2
-            f.writelines(new_lines)
-            print(f"[+] {DOMAIN} and {DOMAIN2} enabled (unblocked).")
-        else:
-            # BLOCK: add the LINE and write all lines
-            new_lines.append(LINE)
-            f.writelines(new_lines)
-            print(f"[+] {DOMAIN} and {DOMAIN2} disabled (blocked).")
+
+def unblock():
+    """Ensures the domains are unblocked."""
+    if not is_blocked():
+        print(f"[+] {DOMAIN} and {DOMAIN2} are already unblocked.")
+        return
+
+    try:
+        with open(HOSTS, "r") as f:
+            lines = f.readlines()
+
+        with open(HOSTS, "w") as f:
+            for line in lines:
+                if DOMAIN not in line and DOMAIN2 not in line:
+                    f.write(line)
+            print(f"[+] {DOMAIN} and {DOMAIN2} are now enabled (unblocked).")
+    except PermissionError:
+        print("Error: Permission denied. Please run with sudo.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
     if os.geteuid() != 0:
-        print(f"current user id:{os.geteuid()}")
-        print("Jalankan dengan sudo!")
+        print("This script requires root privileges. Please run with sudo.")
+        sys.exit(1)
+
+    if len(sys.argv) not in [1, 2]:
+        print("Usage: sudo toggle [block|unblock]")
+        sys.exit(1)
+
+    action = None
+    if len(sys.argv) == 2:
+        action = sys.argv[1]
+
+    if action == "block":
+        block()
+    elif action == "unblock":
+        unblock()
     else:
-        print(f"current user id:{os.geteuid()}")
-        toggle()
+        # If no argument or an invalid one is given, print the current status.
+        if is_blocked():
+            print(f"Current status: BLOCKED ({DOMAIN}, {DOMAIN2})")
+        else:
+            print(f"Current status: UNBLOCKED ({DOMAIN}, {DOMAIN2})")
+        print("Usage: sudo toggle [block|unblock]")
+
